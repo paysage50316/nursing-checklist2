@@ -452,6 +452,41 @@
   .result-total-pill.tn { background: var(--n-bg); color: var(--n-color); border: 1.5px solid var(--n-border); }
   .result-total-pill.td { background: var(--d-bg); color: var(--d-color); border: 1.5px solid var(--d-border); }
 
+
+  /* ── MEMO ── */
+  .memo-area {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface2);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px;
+    color: var(--text-primary);
+    resize: vertical;
+    min-height: 52px;
+    line-height: 1.5;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  .memo-area:focus { outline: none; border-color: var(--accent); background: #fff; }
+  .memo-area::placeholder { color: var(--text-muted); }
+  .result-memo {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  .result-memo-label {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    margin-bottom: 4px; display: block;
+  }
   .hidden { display: none !important; }
 
   @media (max-width: 900px) {
@@ -494,6 +529,9 @@
         </button>
         <button class="nav-tab" data-section="s2" onclick="goToSection('s2',this)">
           🩺 상황② 유치도뇨 <span class="tab-count">19개</span>
+        </button>
+        <button class="nav-tab" data-section="memo-section" onclick="goToSection('memo-section',this)">
+          📝 메모
         </button>
       </div>
     </div>
@@ -563,6 +601,17 @@
       </div>
     </div>
 
+    <!-- 메모 섹션 -->
+    <div class="section-card" id="memo-section">
+      <div class="section-header">
+        <span class="section-badge" style="background:#f0f9ff;color:#0369a1">📝</span>
+        <span class="section-title">교육생별 메모</span>
+      </div>
+      <div id="memoCards" style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+        <p style="color:var(--text-muted);font-size:13px">교육생을 추가하면 메모란이 표시됩니다.</p>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -622,7 +671,7 @@ const SECTIONS = {
 // ─────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────
-let persons = []; // {id, name}
+let persons = []; // {id, name, memo}
 // checks[sectionKey][personId][itemNum] = {Y:bool, N:bool, D:bool}
 // Y와 N은 상호 배타, D는 Y 또는 N과 동시 체크 가능
 let checks = { s1:{}, s2:{} };
@@ -813,7 +862,7 @@ function renderPersonList() {
       n += countVal(c, 'N');
       d += countVal(c, 'D');
     });
-    html += `<div class="person-item">
+    html += `<div class="person-item" >
       <div class="person-dot" style="background:${PERSON_COLORS[i]}">${i+1}</div>
       <input class="person-name-input" type="text" value="${p.name}" placeholder="이름 (5자 이내)"
         maxlength="5" data-pid="${p.id}" />
@@ -895,6 +944,28 @@ function renderAll() {
   renderPersonList();
   ['s1','s2'].forEach(sk => renderTable(sk));
   renderSummary();
+  renderMemoCards();
+}
+
+function renderMemoCards() {
+  const el = document.getElementById('memoCards');
+  if (!el) return;
+  if (persons.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">교육생을 추가하면 메모란이 표시됩니다.</p>';
+    return;
+  }
+  let html = '';
+  persons.forEach((p, i) => {
+    const name = p.name || `교육생 ${i+1}`;
+    html += `<div style="display:flex;flex-direction:column;gap:6px">
+      <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px">
+        <span style="display:inline-flex;width:22px;height:22px;border-radius:50%;background:${PERSON_COLORS[i]};color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center">${i+1}</span>
+        ${name}
+      </label>
+      <textarea class="memo-area" data-memo-pid="${p.id}" placeholder="메모를 입력하세요...">${p.memo || ''}</textarea>
+    </div>`;
+  });
+  el.innerHTML = html;
 }
 
 // ─────────────────────────────────────────────
@@ -905,14 +976,30 @@ document.getElementById('addPersonBtn').onclick = addPerson;
 // 이벤트 위임: 이름 입력 및 삭제 버튼
 document.getElementById('personList').addEventListener('input', e => {
   const input = e.target.closest('.person-name-input');
-  if (!input) return;
-  const pid = Number(input.dataset.pid);
+  if (input) {
+    const pid = Number(input.dataset.pid);
+    const p = persons.find(x => x.id === pid);
+    if (p) p.name = input.value;
+    renderHeaders();
+    renderSummary();
+    updatePersonStats();
+    renderMemoCards();
+    return;
+  }
+  const memo = e.target.closest('.memo-area');
+  if (memo) {
+    const pid = Number(memo.dataset.memoPid);
+    const p = persons.find(x => x.id === pid);
+    if (p) p.memo = memo.value;
+  }
+});
+
+document.getElementById('memoCards').addEventListener('input', e => {
+  const memo = e.target.closest('.memo-area');
+  if (!memo) return;
+  const pid = Number(memo.dataset.memoPid);
   const p = persons.find(x => x.id === pid);
-  if (p) p.name = input.value;
-  renderHeaders();
-  renderSummary();
-  // 집계 숫자만 갱신 (DOM 재생성 없이)
-  updatePersonStats();
+  if (p) p.memo = memo.value;
 });
 
 document.getElementById('personList').addEventListener('click', e => {
@@ -969,6 +1056,7 @@ function openResult() {
       grandN += countVal(c,'N');
       grandD += countVal(c,'D');
     });
+    const memoHtml = p.memo ? `<div class="result-memo"><span class="result-memo-label">📝 메모</span>${p.memo.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : '';
     html += `<div class="result-person-card">
       <div class="result-person-header">
         <div class="person-dot" style="background:${PERSON_COLORS[i]}">${i+1}</div>
@@ -982,6 +1070,7 @@ function openResult() {
             <span class="result-total-pill td">D ${grandD}</span>
           </div>
         </div>
+        ${memoHtml}
       </div>
     </div>`;
   });
